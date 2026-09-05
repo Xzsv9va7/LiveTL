@@ -41,6 +41,16 @@ declare namespace Ytc {
     invalidationContinuationData?: {
       timeoutMs: number;
     };
+    reloadContinuationData?: {
+      continuation?: string;
+    };
+    liveChatReplayContinuationData?: {
+      continuation?: string;
+      timeUntilLastMessageMsec?: number;
+    };
+    playerSeekContinuationData?: {
+      continuation?: string;
+    };
   }
 
   interface ReplayAction {
@@ -544,6 +554,7 @@ declare namespace Ytc {
     superSticker?: ParsedSuperSticker;
     membership?: ParsedMembership;
     params?: string;
+    clickTrackingParams?: string;
     membershipGiftPurchase?: ParsedMembershipGiftPurchase;
     membershipGiftRedeem?: boolean;
     canDelete?: boolean;

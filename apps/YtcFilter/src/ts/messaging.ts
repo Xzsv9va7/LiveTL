@@ -68,10 +68,25 @@ const proxyFetch = async (...args: any[]): Promise<any> => {
   });
 };
 
-const buildInnertubeHeaders = (ytcfg: YtCfg) => {
+const buildSapisidhash = (time: number, sid: string): string =>
+  `${time}_${sha1(`${time} ${sid} ${currentDomain}`)}_u`;
+
+const buildAuthorization = (): string | null => {
   const time = Math.floor(Date.now() / 1000);
-  const sapisid = getCookie('__Secure-3PAPISID') || getCookie('SAPISID');
-  const auth = sapisid ? `SAPISIDHASH ${time}_${sha1(`${time} ${sapisid} ${currentDomain}`)}` : null;
+  const sapisid = getCookie('SAPISID') || getCookie('__Secure-3PAPISID') || getCookie('__Secure-1PAPISID');
+  if (!sapisid) return null;
+  const sapisid1 = getCookie('__Secure-1PAPISID') || sapisid;
+  const sapisid3 = getCookie('__Secure-3PAPISID') || sapisid;
+  // YouTube currently sends SAPISIDHASH + SAPISID1PHASH + SAPISID3PHASH with a `_u` suffix.
+  return [
+    `SAPISIDHASH ${buildSapisidhash(time, sapisid)}`,
+    `SAPISID1PHASH ${buildSapisidhash(time, sapisid1)}`,
+    `SAPISID3PHASH ${buildSapisidhash(time, sapisid3)}`,
+  ].join(' ');
+};
+
+const buildInnertubeHeaders = (ytcfg: YtCfg) => {
+  const auth = buildAuthorization();
   const authuser = (ytcfg as any)?.data_?.SESSION_INDEX;
   const visitorId = (ytcfg as any)?.data_?.VISITOR_DATA ?? ytcfg.data_.INNERTUBE_CONTEXT?.client?.visitorData;
   const clientName = (ytcfg as any)?.data_?.INNERTUBE_CLIENT_NAME;
@@ -86,6 +101,7 @@ const buildInnertubeHeaders = (ytcfg: YtCfg) => {
       ...(clientName != null ? { 'X-Youtube-Client-Name': String(clientName) } : {}),
       ...(clientVersion != null ? { 'X-Youtube-Client-Version': String(clientVersion) } : {}),
       ...(pageId != null ? { 'X-Goog-PageId': String(pageId) } : {}),
+      ...(auth != null ? { 'X-Youtube-Bootstrap-Logged-In': 'true' } : {}),
       'X-Origin': currentDomain,
       ...(auth != null ? { Authorization: auth } : {}),
     },

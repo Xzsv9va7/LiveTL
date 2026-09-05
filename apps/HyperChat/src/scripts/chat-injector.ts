@@ -9,8 +9,42 @@ import {
   setInitialData,
   updatePlayerProgress,
   setTheme,
+  noteChatViewChange,
 } from '../ts/messaging';
 import { hcEnabled, autoLiveChat } from '../ts/storage';
+
+const coverOfficialChatList = (): void => {
+  if (document.getElementById('hc-official-cover') != null) return;
+  const apply = (): boolean => {
+    const list = document.querySelector('#chat>#item-list') as HTMLElement | null;
+    const parent = list?.parentElement;
+    if (list == null || parent == null) return false;
+    if (window.getComputedStyle(parent).position === 'static') parent.style.position = 'relative';
+    const cover = document.createElement('div');
+    cover.id = 'hc-official-cover';
+    cover.style.cssText = [
+      'position:absolute',
+      `left:${list.offsetLeft}px`,
+      `top:${list.offsetTop}px`,
+      `width:${Math.max(list.offsetWidth, 1)}px`,
+      `height:${Math.max(list.offsetHeight, 1)}px`,
+      'z-index:9',
+      'background:var(--yt-spec-base-background,#0f0f0f)',
+      'pointer-events:none',
+    ].join(';');
+    parent.appendChild(cover);
+    return true;
+  };
+  if (apply()) return;
+  const observer = new MutationObserver(() => {
+    if (apply()) observer.disconnect();
+  });
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+};
+
+void hcEnabled.get().then((enabled) => {
+  if (enabled) coverOfficialChatList();
+});
 
 const isFirefox = navigator.userAgent.includes('Firefox');
 let hcSettings: HcSettings | null = null;
@@ -49,9 +83,13 @@ const chatLoaded = async (): Promise<void> => {
   const metagetter = document.createElement('script');
   metagetter.src = getScriptURL('chat-metagetter.js');
   const ytcfg: any = await new Promise((resolve) => {
-    window.addEventListener('fetchMeta', (event) => {
-      resolve(JSON.parse((event as any).detail as string));
-    });
+    window.addEventListener(
+      'fetchMeta',
+      (event) => {
+        resolve(JSON.parse((event as any).detail as string));
+      },
+      { once: true },
+    );
     document.body.appendChild(metagetter);
   });
   console.log(ytcfg);
@@ -64,9 +102,12 @@ const chatLoaded = async (): Promise<void> => {
   window.addEventListener('messageSent', (d) => {
     processSentMessage((d as CustomEvent).detail);
   });
-  const script = document.createElement('script');
-  script.src = getScriptURL('chat-interceptor.js');
-  document.body.appendChild(script);
+  if (document.querySelector('script[data-hc-interceptor]') == null) {
+    const script = document.createElement('script');
+    script.src = getScriptURL('chat-interceptor.js');
+    script.dataset.hcInterceptor = '1';
+    document.body.appendChild(script);
+  }
 
   // Handle initial data
   const scripts = document.querySelector('body')?.querySelectorAll('script');
@@ -174,16 +215,63 @@ const chatLoaded = async (): Promise<void> => {
       ? chrome.runtime.getURL((isLiveTL ? 'hyperchat/index.html' : 'hyperchat.html') + `?${params.toString()}`)
       : `https://www.youtube.com/embed/hyperchat_embed?${params.toString()}`;
 
+  if (await autoLiveChat.get()) {
+    const live = document.querySelector<HTMLElement>('tp-yt-paper-listbox#menu > :nth-child(2)');
+    if (live) live.click();
+  }
+
+  document.addEventListener(
+    'click',
+    (event) => {
+      const target = event.target as Element | null;
+      const item = target?.closest?.('tp-yt-paper-item');
+      if (item == null || item.closest('tp-yt-paper-listbox#menu') == null) return;
+      const label = (item.textContent ?? '').replace(/\s+/g, ' ');
+      if (!/上位のチャット|チャットのリプレイ|top chat|live chat/i.test(label)) return;
+      const listbox = item.closest('tp-yt-paper-listbox#menu');
+      const index = listbox != null ? Array.from(listbox.querySelectorAll('tp-yt-paper-item')).indexOf(item) : -1;
+      if (index < 0) return;
+      noteChatViewChange(index);
+    },
+    true,
+  );
+
   const ytcItemList = document.querySelector('#chat>#item-list');
   if (!ytcItemList) {
     console.error('Failed to find #chat>#item-list');
     return;
   }
 
-  // Inject hyperchat
-  ytcItemList.outerHTML = `
-  <iframe id="hyperchat" src="${source}" style="border: 0px; width: 100%; height: 100%;"/>
-  `;
+  if (document.getElementById('hyperchat') == null) {
+    const list = ytcItemList as HTMLElement;
+    const parent = list.parentElement;
+    if (parent != null && window.getComputedStyle(parent).position === 'static') {
+      parent.style.position = 'relative';
+    }
+    list.style.pointerEvents = 'none';
+    const iframe = document.createElement('iframe');
+    iframe.id = 'hyperchat';
+    iframe.tabIndex = -1;
+    iframe.src = source;
+    const syncOverlay = (): void => {
+      iframe.style.cssText = [
+        'position:absolute',
+        `left:${list.offsetLeft}px`,
+        `top:${list.offsetTop}px`,
+        `width:${list.offsetWidth}px`,
+        `height:${list.offsetHeight}px`,
+        'border:0',
+        'z-index:10',
+        'background:var(--yt-spec-base-background,#0f0f0f)',
+      ].join(';');
+    };
+    parent?.appendChild(iframe);
+    syncOverlay();
+    if (typeof ResizeObserver !== 'undefined') {
+      new ResizeObserver(syncOverlay).observe(list);
+    }
+    window.addEventListener('resize', syncOverlay);
+  }
 
   // Remove ticker element
   const ytcTicker = document.querySelector('#ticker');
@@ -192,15 +280,6 @@ const chatLoaded = async (): Promise<void> => {
     return;
   }
   ytcTicker.remove();
-
-  if (await autoLiveChat.get()) {
-    const live = document.querySelector<HTMLElement>('tp-yt-paper-listbox#menu > :nth-child(2)');
-    if (!live) {
-      console.error('Failed to find Live Chat menu item');
-      return;
-    }
-    live.click();
-  }
 };
 
 if (isLiveTL) {
