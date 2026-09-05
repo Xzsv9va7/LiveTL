@@ -186,18 +186,6 @@ const onLiveChatPollRequest = (details: chrome.webRequest.WebRequestBodyDetails)
 const onContextMenuRequest = (details: chrome.webRequest.WebRequestBodyDetails): void => {
   if (details.method !== 'POST' || details.tabId < 0) return;
   if (!details.url.includes('/live_chat/get_item_context_menu')) return;
-  const body = decodeWebRequestBody(details.requestBody);
-  if (body != null) {
-    rememberLiveChatBody(details.tabId, details.frameId, body);
-    chrome.tabs.sendMessage(
-      details.tabId,
-      { type: 'hcLiveChatBody', body },
-      { frameId: details.frameId },
-      () => {
-        void chrome.runtime.lastError;
-      },
-    );
-  }
   attachResponseCapture(details, 'hcContextMenuResponse');
 };
 

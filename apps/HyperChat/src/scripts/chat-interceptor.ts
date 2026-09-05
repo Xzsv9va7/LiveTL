@@ -79,18 +79,33 @@ const hydrateCapturedLiveChatBody = (): void => {
 const installVisibilityBlock = (): void => {
   if ((window as any).__hcVisibilityBlocked) return;
   (window as any).__hcVisibilityBlocked = true;
-  for (const eventName of ['visibilitychange', 'webkitvisibilitychange', 'blur']) {
-    window.addEventListener(
-      eventName,
-      (event) => {
-        event.stopImmediatePropagation();
-      },
-      true,
-    );
-  }
+  // visibilitychange must reach document: ytc-fix-memleaks rebinds the scheduler there.
+  window.addEventListener(
+    'blur',
+    (event) => {
+      event.stopImmediatePropagation();
+    },
+    true,
+  );
 };
 
 let lastContextMenuJson: any = null;
+let lastContextMenuMessageId: string | null = null;
+let pendingContextMenuMessageId: string | null = null;
+
+const storeContextMenuCapture = (detail: string, messageId: string): void => {
+  try {
+    lastContextMenuJson = JSON.parse(detail.replace(/^\)\]\}'\s*/, ''));
+    lastContextMenuMessageId = messageId;
+    (window as any).__hcLastContextMenuJson = detail;
+    (window as any).__hcLastContextMenuMessageId = messageId;
+  } catch {}
+};
+
+const contextMenuFor = (messageId: string): any | null => {
+  if (messageId === '' || lastContextMenuMessageId !== messageId) return null;
+  return lastContextMenuJson;
+};
 
 window.addEventListener(HC_LIVE_CHAT_BODY_EVENT, (event) => {
   const detail = (event as CustomEvent).detail;
@@ -102,10 +117,8 @@ window.addEventListener(HC_LIVE_CHAT_BODY_EVENT, (event) => {
 window.addEventListener('hcContextMenuResponse', (event) => {
   const detail = (event as CustomEvent).detail;
   if (typeof detail !== 'string' || detail === '') return;
-  try {
-    lastContextMenuJson = JSON.parse(detail.replace(/^\)\]\}'\s*/, ''));
-    (window as any).__hcLastContextMenuJson = detail;
-  } catch {}
+  if (pendingContextMenuMessageId == null) return;
+  storeContextMenuCapture(detail, pendingContextMenuMessageId);
 });
 hydrateCapturedLiveChatBody();
 if (lastLiveChatBody != null) installVisibilityBlock();
@@ -485,8 +498,11 @@ const openOfficialMessageMenu = (renderer: HTMLElement, menuButton: HTMLElement)
 };
 
 const runOfficialChatAction = async (payload: { action: string; messageId: string }): Promise<void> => {
+  pendingContextMenuMessageId = payload.messageId;
   lastContextMenuJson = null;
+  lastContextMenuMessageId = null;
   (window as any).__hcLastContextMenuJson = '';
+  (window as any).__hcLastContextMenuMessageId = '';
   const unmask = maskOfficialPopups();
   try {
     const renderer = document.getElementById(payload.messageId);
@@ -506,14 +522,9 @@ const runOfficialChatAction = async (payload: { action: string; messageId: strin
     if (menuButton == null) throw new Error('Official chat menu button not found');
     openOfficialMessageMenu(renderer, menuButton);
     for (let i = 0; i < 40; i++) {
-      const rawMenu = (window as any).__hcLastContextMenuJson;
-      if (lastContextMenuJson == null && typeof rawMenu === 'string' && rawMenu !== '') {
-        try {
-          lastContextMenuJson = JSON.parse(rawMenu.replace(/^\)\]\}'\s*/, ''));
-        } catch {}
-      }
-      if (lastContextMenuJson != null) {
-        const how = await runCapturedBlockCommand(lastContextMenuJson);
+      const captured = contextMenuFor(payload.messageId);
+      if (captured != null) {
+        const how = await runCapturedBlockCommand(captured);
         if (how != null && !how.startsWith('fail:')) return;
         throw new Error('Official chat action item not found');
       }
@@ -527,6 +538,7 @@ const runOfficialChatAction = async (payload: { action: string; messageId: strin
     }
     throw new Error('Official chat action item not found');
   } finally {
+    pendingContextMenuMessageId = null;
     unmask();
   }
 };

@@ -361,9 +361,11 @@ const executeChatAction = async (
         return null;
       }
     };
-    let res =
-      parseCapturedMenu((window as any).__hcLastContextMenuJson) ??
-      (await fetchContextMenu(`${contextMenuUrl}&pbj=1`, false));
+    const capturedForMessage =
+      (window as any).__hcLastContextMenuMessageId === message.messageId
+        ? parseCapturedMenu((window as any).__hcLastContextMenuJson)
+        : null;
+    let res = capturedForMessage ?? (await fetchContextMenu(`${contextMenuUrl}&pbj=1`, false));
     if (res?.error == null && isEmptyMenu(res)) {
       res = await fetchContextMenu(`${contextMenuUrl}&pbj=1`, true);
     }
