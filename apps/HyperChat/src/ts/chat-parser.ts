@@ -73,6 +73,37 @@ const parseReplyThreadButton = (renderer: Ytc.TextMessageRenderer): ReplyButtonI
   extractReplyButton(renderer.beforeContentButtons?.[0]?.buttonViewModel) ??
   extractReplyButton(renderer.replyButton?.pdgReplyButtonViewModel?.replyButton?.buttonViewModel);
 
+const extractLiveChatContextMenu = (
+  endpoint: any,
+): { params?: string; clickTrackingParams?: string } => {
+  if (endpoint == null || typeof endpoint !== 'object') return {};
+  const queue = [endpoint];
+  const visited = new Set<any>();
+  let clickTrackingParams: string | undefined =
+    typeof endpoint.clickTrackingParams === 'string' ? endpoint.clickTrackingParams : undefined;
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (current == null || typeof current !== 'object' || visited.has(current)) continue;
+    visited.add(current);
+    if (clickTrackingParams == null && typeof current.clickTrackingParams === 'string') {
+      clickTrackingParams = current.clickTrackingParams;
+    }
+    const direct = current.liveChatItemContextMenuEndpoint?.params;
+    if (typeof direct === 'string') {
+      return { params: direct, clickTrackingParams };
+    }
+    const commands = current.commandExecutorCommand?.commands;
+    if (Array.isArray(commands)) {
+      for (const command of commands) queue.push(command);
+    }
+    if (current.innertubeCommand != null) queue.push(current.innertubeCommand);
+    for (const value of Object.values(current)) {
+      if (value != null && typeof value === 'object') queue.push(value);
+    }
+  }
+  return { clickTrackingParams };
+};
+
 const fixUrl = (url: string): string => {
   if (url.startsWith('//')) {
     return 'https:' + url;
@@ -256,6 +287,14 @@ const parseAddChatItemAction = (
     alt: messageRenderer.authorName?.simpleText ?? '',
   };
   const channelId = renderer.authorExternalChannelId;
+  const contextMenu = [
+    messageRenderer.contextMenuEndpoint,
+    (messageRenderer as any).contextMenuButton,
+    messageRenderer,
+    renderer,
+  ]
+    .map((node) => extractLiveChatContextMenu(node))
+    .find((menu) => menu.params != null) ?? {};
 
   const canDelete =
     messageRenderer.inlineActionButtons?.some((b) => b.buttonRenderer?.icon?.iconType === 'DELETE') ?? false;
@@ -273,7 +312,8 @@ const parseAddChatItemAction = (
     timestamp: isReplay && timestampText != null ? timestampText : formatTimestamp(timestampUsec),
     showtime: isReplay ? liveTimeoutOrReplayMs : liveShowtimeMs,
     messageId: renderer.id,
-    params: messageRenderer.contextMenuEndpoint?.liveChatItemContextMenuEndpoint.params,
+    params: contextMenu.params,
+    clickTrackingParams: contextMenu.clickTrackingParams,
     canDelete,
   };
   if (channelId != null) {
@@ -548,6 +588,8 @@ export const parseChatResponse = (response: string, isReplay: boolean): Ytc.Pars
     return;
   }
 
+  const refresh = base.clientMessages != null;
+
   const messageArray: Ytc.ParsedTimedItem[] = [];
   const bonkArray: Ytc.ParsedBonk[] = [];
   const deleteArray: Ytc.ParsedDeleted[] = [];
@@ -581,7 +623,6 @@ export const parseChatResponse = (response: string, isReplay: boolean): Ytc.Pars
     sortAction(parsedAction, messageArray, bonkArray, deleteArray, miscArray);
   });
 
-  const refresh = base.clientMessages != null;
   if (!isReplay && !refresh) cheatTimestamps(messageArray);
 
   const likeCounts: Record<string, number> = {};

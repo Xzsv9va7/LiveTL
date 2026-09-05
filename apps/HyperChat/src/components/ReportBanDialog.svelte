@@ -27,7 +27,7 @@
     <Button on:click={() => {
       $reportDialog?.callback($optionStore);
       $reportDialog = null;
-    }} color="error" disabled={!$optionStore}>Report</Button>
+    }} color="error" add="bg-error-500 hover:bg-error-400 text-white" disabled={!$optionStore}>Report</Button>
   </div>
 </Dialog>
 
@@ -41,6 +41,6 @@
   <div slot="actions">
     <Button on:click={() => {
       $alertDialog = null;
-    }} color="primary">OK</Button>
+    }} color="primary" add="bg-primary-500 hover:bg-primary-400 text-white">OK</Button>
   </div>
 </Dialog>

@@ -7,9 +7,19 @@ const safelistSelectors = [
   'stroke-primary',
   'mode-dark',
   'line-through',
-  // Components with custom color prop might need its color to be whitelisted too
+  // Smelte Button color= builds bg/text classes in JS, so purge will drop them
+  // unless they appear as literals or are listed here.
   'bg-blue-500',
   'hover:bg-blue-400',
+  'bg-primary-500',
+  'hover:bg-primary-400',
+  'bg-error-500',
+  'hover:bg-error-400',
+  'text-primary-400',
+  'text-primary-500',
+  'text-error-400',
+  'text-error-500',
+  'text-white',
 ];
 
 const safelistPatterns = [

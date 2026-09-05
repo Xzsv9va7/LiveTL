@@ -9,14 +9,29 @@
     "48": "assets/logo-48.png",
     "128": "assets/logo-128.png"
   },
-  "permissions": ["storage"],
+  "{{firefox}}.permissions": ["storage", "webRequest", "webRequestBlocking"],
+  "{{chrome}}.permissions": ["storage", "webRequest"],
   "{{mv3}}.host_permissions": [
     "https://www.youtube.com/live_chat*",
     "https://www.youtube.com/live_chat_replay*",
     "https://studio.youtube.com/live_chat*",
-    "https://studio.youtube.com/live_chat_replay*"
+    "https://studio.youtube.com/live_chat_replay*",
+    "https://www.youtube.com/youtubei/*",
+    "https://studio.youtube.com/youtubei/*",
+    "https://youtubei.googleapis.com/*"
   ],
   "content_scripts": [
+    {
+      "matches": [
+        "https://www.youtube.com/live_chat*",
+        "https://www.youtube.com/live_chat_replay*",
+        "https://studio.youtube.com/live_chat*",
+        "https://studio.youtube.com/live_chat_replay*"
+      ],
+      "js": ["scripts/chat-early-inject.ts"],
+      "run_at": "document_start",
+      "all_frames": true
+    },
     {
       "matches": [
         "https://www.youtube.com/live_chat*",
@@ -72,8 +87,8 @@
   "{{chrome}}.incognito": "split",
   "{{mv3}}.{{firefox}}.browser_specific_settings": {
     "gecko": {
-      "id": "{14a15c41-13f4-498e-986c-7f00435c4d00}",
-      "strict_min_version": "115.0"
+      "id": "{c8f21e4a-6b7d-4a91-8e3c-2f9d0b5a7c11}",
+      "strict_min_version": "128.0"
     }
   }
 }

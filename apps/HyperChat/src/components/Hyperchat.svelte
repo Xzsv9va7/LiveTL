@@ -307,6 +307,8 @@
         break;
       case 'forceUpdate':
         messageKeys.clear();
+        piledMessages = [];
+        isAtBottom = true;
         messageActions = [...action.messages].filter(shouldShowMessage);
         if (action.showWelcome) {
           messageActions = [...messageActions, welcome];
